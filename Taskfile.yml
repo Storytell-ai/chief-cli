@@ -1,0 +1,66 @@
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task --list
+    silent: true
+
+  build:
+    desc: Build the chief CLI
+    cmds:
+      - go build -ldflags "-X main.version=$(git describe --tags --always --dirty)" -o bin/chief ./cmd/chief
+
+  run:
+    desc: Run the chief CLI
+    cmds:
+      - go run ./cmd/chief {{.CLI_ARGS}}
+
+  install:
+    desc: Install the chief CLI to GOBIN
+    vars:
+      GOBIN:
+        sh: go env GOBIN || go env GOPATH | sed 's:$:/bin:'
+    cmds:
+      - go build -ldflags "-X main.version=$(git describe --tags --always --dirty)" -o "{{.GOBIN}}/chief" ./cmd/chief
+
+  test:
+    desc: Run the test suite
+    cmds:
+      - go test ./...
+
+  test:race:
+    desc: Run the tests with the race detector and coverage
+    cmds:
+      - go test -race -count=1 -cover ./...
+
+  coverage:
+    desc: Write a coverage profile and print the per-function summary
+    cmds:
+      - go test -cover -coverprofile=coverage.out ./...
+      - go tool cover -func=coverage.out
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  fmt:
+    desc: Format the code with golangci-lint
+    cmds:
+      - golangci-lint fmt
+
+  tidy:
+    desc: Tidy
+    cmds:
+      - go mod tidy
+
+  release:snapshot:
+    desc: Build a local snapshot release without publishing
+    cmds:
+      - goreleaser release --snapshot --clean
+
+  release:
+    desc: Cut a release
+    cmds:
+      - goreleaser release --clean
