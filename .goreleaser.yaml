@@ -46,7 +46,6 @@ homebrew_casks:
       owner: Storytell-ai
       name: homebrew-tap
       branch: main
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/Storytell-ai/chief-cli"
     description: "Chief command-line interface"
     hooks:
