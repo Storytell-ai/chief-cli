@@ -17,7 +17,6 @@ builds:
     ldflags:
       - -s -w -X main.version={{ .Version }}
     goos:
-      - linux
       - darwin
       - windows
     goarch:
@@ -38,6 +37,24 @@ archives:
       - goos: windows
         formats:
           - zip
+
+homebrew_casks:
+  - name: chief
+    binaries:
+      - chief
+    repository:
+      owner: Storytell-ai
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/Storytell-ai/chief-cli"
+    description: "Chief command-line interface"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/chief"]
+          end
 
 changelog:
   sort: asc
