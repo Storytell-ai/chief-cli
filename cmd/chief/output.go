@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
+	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"golang.org/x/term"
@@ -23,6 +26,8 @@ type printer struct {
 	json bool
 	live bool
 	tty  bool
+
+	mdRenderer *glamour.TermRenderer
 
 	mu sync.Mutex
 
@@ -307,4 +312,39 @@ func (p *printer) writeRawJSON(raw []byte) error {
 	}
 	p.line(string(pretty))
 	return nil
+}
+
+// markdown renders s as styled markdown on a TTY and prints it verbatim when
+// piped or in --json mode. A render failure falls back to the raw text.
+func (p *printer) markdown(s string) {
+	if !p.tty || p.json {
+		p.line(s)
+		return
+	}
+	out, err := p.markdownRenderer().Render(s)
+	if err != nil {
+		p.line(s)
+		return
+	}
+	p.line(strings.TrimRight(out, "\n"))
+}
+
+// markdownRenderer builds the glamour renderer once, theming it from the
+// terminal background.
+func (p *printer) markdownRenderer() *glamour.TermRenderer {
+	if p.mdRenderer == nil {
+		style := styles.DarkStyle
+		if !lipgloss.HasDarkBackground(os.Stdin, os.Stdout) {
+			style = styles.LightStyle
+		}
+		r, err := glamour.NewTermRenderer(
+			glamour.WithStandardStyle(style),
+			glamour.WithWordWrap(p.width),
+		)
+		if err != nil {
+			panic(fmt.Sprintf("glamour.NewTermRenderer: %v", err))
+		}
+		p.mdRenderer = r
+	}
+	return p.mdRenderer
 }

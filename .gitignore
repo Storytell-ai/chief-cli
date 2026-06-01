@@ -13,6 +13,7 @@
 
 # Local build output
 bin/
+/chief
 
 # Dot environment files
 .env

@@ -92,6 +92,7 @@ func Execute(ctx context.Context) error {
 	root.AddCommand(newDoctorCommand(state))
 	root.AddCommand(newActionsCommand(state))
 	root.AddCommand(newAssetsCommand(state))
+	root.AddCommand(newChatsCommand(state))
 	root.AddCommand(newLabelsCommand(state))
 	root.AddCommand(newSessionsCommand(state))
 	root.AddCommand(newSkillsCommand(state))
@@ -136,27 +137,33 @@ func newDeleteCommand(state *app, kind string, del func(ctx context.Context, id 
 		Short: "Delete " + article(kind) + " " + kind,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ok, err := confirmDelete(state.printer, force, kind, args[0])
-			if err != nil {
-				return err
-			}
-			if !ok {
-				state.printer.errline("aborted")
-				return nil
-			}
-			if err := del(cmd.Context(), args[0]); err != nil {
-				if chief.IsNotFound(err) {
-					return fmt.Errorf("%s %q not found", kind, args[0])
-				}
-				return err
-			}
-			return state.printer.emit(map[string]string{"deleted": args[0]}, func() {
-				state.printer.line(fmt.Sprintf("%s deleted %s", state.printer.ok.Render("✓"), args[0]))
-			})
+			return confirmAndDelete(cmd.Context(), state, force, kind, args[0], del)
 		},
 	}
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip the confirmation prompt")
 	return cmd
+}
+
+// confirmAndDelete prompts (unless force), runs del, maps a not-found error to a
+// friendly message, and reports the deletion. kind names the resource.
+func confirmAndDelete(ctx context.Context, state *app, force bool, kind, id string, del func(ctx context.Context, id string) error) error {
+	ok, err := confirmDelete(state.printer, force, kind, id)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		state.printer.errline("aborted")
+		return nil
+	}
+	if err := del(ctx, id); err != nil {
+		if chief.IsNotFound(err) {
+			return fmt.Errorf("%s %q not found", kind, id)
+		}
+		return err
+	}
+	return state.printer.emit(map[string]string{"deleted": id}, func() {
+		state.printer.line(fmt.Sprintf("%s deleted %s", state.printer.ok.Render("✓"), id))
+	})
 }
 
 // newToggleCommand builds an enable/disable command. verb is "enable" or
