@@ -131,18 +131,21 @@ func newActionsCreateCommand(state *app) *cobra.Command {
 }
 
 func newActionsListCommand(state *app) *cobra.Command {
+	f := &pagingFlags{}
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List actions in the project",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			page, err := state.chief.Actions.List(cmd.Context())
+			page, err := state.chief.Actions.List(cmd.Context(), f.options()...)
 			if err != nil {
 				return err
 			}
 			return state.printer.emit(page, func() { renderActionTable(state.printer, page) })
 		},
 	}
+
+	f.register(cmd, "action", "actions")
 	return cmd
 }
 
@@ -163,6 +166,10 @@ func renderActionTable(p *printer, page *chief.ActionPage) {
 		})
 	}
 	p.table(headers, rows)
+
+	if page.HasMore {
+		p.line(p.subtle.Render(fmt.Sprintf("more available (last_id %s)", page.LastID)))
+	}
 }
 
 func newActionsGetCommand(state *app) *cobra.Command {

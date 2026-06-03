@@ -7,7 +7,7 @@ require (
 	charm.land/glamour/v2 v2.0.0
 	charm.land/huh/v2 v2.0.3
 	charm.land/lipgloss/v2 v2.0.3
-	github.com/Storytell-ai/chief-go v0.2.0
+	github.com/Storytell-ai/chief-go v0.3.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/sync v0.19.0

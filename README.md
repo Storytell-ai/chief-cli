@@ -221,7 +221,7 @@ chief actions create "Triage incoming" \
   --prompt "Tag and route this document" \
   --trigger new --label-id label_inbox
 
-chief actions list
+chief actions list --limit 20
 chief actions disable action_123
 chief actions enable action_123
 chief actions delete action_123
@@ -245,7 +245,7 @@ chief actions delete action_123
 
 ```bash
 chief labels create "Contracts" --color "#6b7280" --icon file
-chief labels list
+chief labels list --limit 20
 chief labels attach asset_abc Contracts      # attach by name
 chief labels detach asset_abc label_xyz      # detach by ID
 chief labels delete label_xyz
