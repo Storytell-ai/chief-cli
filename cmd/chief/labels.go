@@ -58,18 +58,21 @@ func newLabelsCreateCommand(state *app) *cobra.Command {
 }
 
 func newLabelsListCommand(state *app) *cobra.Command {
+	f := &pagingFlags{}
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List labels in the project",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			page, err := state.chief.Labels.List(cmd.Context())
+			page, err := state.chief.Labels.List(cmd.Context(), f.options()...)
 			if err != nil {
 				return err
 			}
 			return state.printer.emit(page, func() { renderLabelTable(state.printer, page) })
 		},
 	}
+
+	f.register(cmd, "label", "labels")
 	return cmd
 }
 
@@ -85,6 +88,10 @@ func renderLabelTable(p *printer, page *chief.LabelPage) {
 		rows = append(rows, []string{l.LabelID, l.Name})
 	}
 	p.table(headers, rows)
+
+	if page.HasMore {
+		p.line(p.subtle.Render(fmt.Sprintf("more available (last_id %s)", page.LastID)))
+	}
 }
 
 func newLabelsGetCommand(state *app) *cobra.Command {
