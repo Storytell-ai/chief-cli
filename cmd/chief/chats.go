@@ -21,6 +21,9 @@ func newChatsCommand(state *app) *cobra.Command {
 	cmd.AddCommand(newChatsListCommand(state))
 	cmd.AddCommand(newChatsUpdateCommand(state))
 	cmd.AddCommand(newChatsDeleteCommand(state))
+	cmd.AddCommand(newChatsVisibilityCommand(state))
+	cmd.AddCommand(newChatsMembersCommand(state))
+	cmd.AddCommand(newChatsShareCommand(state))
 	return cmd
 }
 
@@ -277,9 +280,9 @@ func newChatsListCommand(state *app) *cobra.Command {
 				}
 				rows := make([][]string, 0, len(page.Data))
 				for _, c := range page.Data {
-					rows = append(rows, []string{c.ChatID, c.CreatedAt.Format(time.RFC3339)})
+					rows = append(rows, []string{c.ChatID, c.Title, string(c.Visibility), c.CreatedAt.Format(time.RFC3339)})
 				}
-				state.printer.table([]string{"ID", "CREATED"}, rows)
+				state.printer.table([]string{"ID", "TITLE", "VISIBILITY", "CREATED"}, rows)
 			})
 		},
 	}
@@ -325,6 +328,196 @@ func newChatsDeleteCommand(state *app) *cobra.Command {
 				})
 			}
 			return confirmAndDelete(cmd.Context(), state, force, "chat", args[0], state.chief.Chats.Delete)
+		},
+	}
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip the confirmation prompt")
+	return cmd
+}
+
+func newChatsVisibilityCommand(state *app) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "visibility <chat-id> <project|restricted|private>",
+		Short: "Set a chat's access level",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			level := chief.ChatVisibility(args[1])
+			switch level {
+			case chief.ChatVisibilityProject, chief.ChatVisibilityRestricted, chief.ChatVisibilityPrivate:
+			default:
+				return fmt.Errorf("invalid visibility %q: must be project, restricted, or private", args[1])
+			}
+			resp, err := state.chief.Chats.SetVisibility(cmd.Context(), args[0], level)
+			if err != nil {
+				if chief.IsNotFound(err) {
+					return fmt.Errorf("chat %q not found", args[0])
+				}
+				return err
+			}
+			return state.printer.emit(resp, func() {
+				state.printer.kv("Chat ID", resp.ChatID)
+				state.printer.kv("Visibility", string(resp.Visibility))
+			})
+		},
+	}
+	return cmd
+}
+
+func newChatsMembersCommand(state *app) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "members",
+		Short: "Manage a restricted chat's audience",
+	}
+	cmd.AddCommand(newChatsMembersListCommand(state))
+	cmd.AddCommand(newChatsMembersAddCommand(state))
+	cmd.AddCommand(newChatsMembersRemoveCommand(state))
+	return cmd
+}
+
+func newChatsMembersListCommand(state *app) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list <chat-id>",
+		Short: "List a chat's audience",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			list, err := state.chief.Chats.ListMembers(cmd.Context(), args[0])
+			if err != nil {
+				if chief.IsNotFound(err) {
+					return fmt.Errorf("chat %q not found", args[0])
+				}
+				return err
+			}
+			return state.printer.emit(list, func() {
+				if len(list.Members) == 0 {
+					state.printer.line("no members")
+					return
+				}
+				rows := make([][]string, 0, len(list.Members))
+				for _, m := range list.Members {
+					rows = append(rows, []string{m.UserID, m.Email, m.Name})
+				}
+				state.printer.table([]string{"USER ID", "EMAIL", "NAME"}, rows)
+			})
+		},
+	}
+	return cmd
+}
+
+func newChatsMembersAddCommand(state *app) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "add <chat-id> <email>",
+		Short: "Add a project member to a chat's audience",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			member, err := state.chief.Chats.AddMember(cmd.Context(), args[0], args[1])
+			if err != nil {
+				if chief.IsNotFound(err) {
+					return fmt.Errorf("chat %q not found", args[0])
+				}
+				return err
+			}
+			return state.printer.emit(member, func() {
+				p := state.printer
+				p.kv("User ID", member.UserID)
+				p.kv("Email", member.Email)
+				if member.Name != "" {
+					p.kv("Name", member.Name)
+				}
+			})
+		},
+	}
+	return cmd
+}
+
+func newChatsMembersRemoveCommand(state *app) *cobra.Command {
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "remove <chat-id> <user-id>",
+		Short: "Remove a user from a chat's audience",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return confirmAndDelete(cmd.Context(), state, force, "member", args[1], func(ctx context.Context, id string) error {
+				return state.chief.Chats.RemoveMember(ctx, args[0], id)
+			})
+		},
+	}
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip the confirmation prompt")
+	return cmd
+}
+
+func newChatsShareCommand(state *app) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "share",
+		Short: "Manage a chat's public share link",
+	}
+	cmd.AddCommand(newChatsShareCreateCommand(state))
+	cmd.AddCommand(newChatsShareGetCommand(state))
+	cmd.AddCommand(newChatsShareDeleteCommand(state))
+	return cmd
+}
+
+func printShareLink(p *printer, link *chief.ShareLinkResponse) {
+	if !link.IsShared {
+		p.line("not shared")
+		return
+	}
+	p.kv("URL", link.URL)
+	if link.CreatedAt != nil {
+		p.kv("Created", link.CreatedAt.Format(time.RFC3339))
+	}
+}
+
+func newChatsShareCreateCommand(state *app) *cobra.Command {
+	var regenerate bool
+	cmd := &cobra.Command{
+		Use:   "create <chat-id>",
+		Short: "Create a chat's public share link",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			create := state.chief.Chats.CreateShareLink
+			if regenerate {
+				create = state.chief.Chats.RegenerateShareLink
+			}
+			link, err := create(cmd.Context(), args[0])
+			if err != nil {
+				if chief.IsNotFound(err) {
+					return fmt.Errorf("chat %q not found", args[0])
+				}
+				return err
+			}
+			return state.printer.emit(link, func() { printShareLink(state.printer, link) })
+		},
+	}
+	cmd.Flags().BoolVar(&regenerate, "regenerate", false, "revoke the current link and mint a new URL")
+	return cmd
+}
+
+func newChatsShareGetCommand(state *app) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get <chat-id>",
+		Short: "Show a chat's share-link status",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			link, err := state.chief.Chats.GetShareLink(cmd.Context(), args[0])
+			if err != nil {
+				if chief.IsNotFound(err) {
+					return fmt.Errorf("chat %q not found", args[0])
+				}
+				return err
+			}
+			return state.printer.emit(link, func() { printShareLink(state.printer, link) })
+		},
+	}
+	return cmd
+}
+
+func newChatsShareDeleteCommand(state *app) *cobra.Command {
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "delete <chat-id>",
+		Short: "Revoke a chat's share link",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return confirmAndDelete(cmd.Context(), state, force, "share link", args[0], state.chief.Chats.DeleteShareLink)
 		},
 	}
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip the confirmation prompt")
