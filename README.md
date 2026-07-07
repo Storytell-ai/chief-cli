@@ -266,7 +266,7 @@ chief sessions delete session_abc
 
 ### MCP server
 
-`chief mcp config <harness>` prints a ready-to-paste [Model Context Protocol](https://modelcontextprotocol.io) server snippet, prefilled with your current credentials, that points a coding agent at the `chief-mcp` server. Supported harnesses: `claude`, `cursor`, and `codex`.
+`chief mcp config <harness>` prints a ready-to-paste [Model Context Protocol](https://modelcontextprotocol.io) server snippet, prefilled with your current credentials, that points a coding agent at the `chief-mcp` server. Supported harnesses: `claude`, `cursor`, `codex`, and `hermes`.
 
 ```bash
 chief mcp config claude
@@ -292,6 +292,7 @@ The hint printed to stderr tells you where each harness expects the snippet:
 - **Claude Code** — `.mcp.json` (project) or `~/.claude.json` (user), or run `claude mcp add chief -- chief-mcp stdio`
 - **Cursor** — `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)
 - **Codex** — `~/.codex/config.toml` (the snippet is emitted as TOML for this harness)
+- **Hermes** — merge under `mcp_servers` in `~/.hermes/config.yaml` (the snippet is emitted as YAML for this harness), then run `/reload-mcp` in Hermes
 
 If credentials aren't configured yet, the snippet uses placeholders you can fill in, or pass `--api-key` and `--project` to bake them in.
 

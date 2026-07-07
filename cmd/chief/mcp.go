@@ -23,7 +23,7 @@ func newMCPCommand(state *app) *cobra.Command {
 func newMCPConfigCommand(state *app) *cobra.Command {
 	return &cobra.Command{
 		Use:         "config <harness>",
-		Short:       "Print an MCP server config snippet for a coding agent (claude, cursor, codex)",
+		Short:       "Print an MCP server config snippet for a coding agent (claude, cursor, codex, hermes)",
 		Args:        cobra.ExactArgs(1),
 		Annotations: map[string]string{annotationSkipClient: "1"},
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -119,8 +119,12 @@ func buildHarnessConfig(name string, rc resolvedConfig) (snippet, hint string, p
 		snippet = codexConfig(bin, args, env)
 		hint = "Add to ~/.codex/config.toml"
 		return
+	case "hermes":
+		snippet = hermesConfig(bin, args, env)
+		hint = "Merge under mcp_servers in ~/.hermes/config.yaml, then run /reload-mcp in Hermes."
+		return
 	default:
-		err = fmt.Errorf("unknown harness: %s (supported: claude, cursor, codex)", name)
+		err = fmt.Errorf("unknown harness: %s (supported: claude, cursor, codex, hermes)", name)
 		return
 	}
 }
@@ -171,4 +175,29 @@ func codexConfig(bin string, args []string, env map[string]string) string {
 	}
 
 	return b.String()
+}
+
+func hermesConfig(bin string, args []string, env map[string]string) string {
+	var b strings.Builder
+
+	b.WriteString("mcp_servers:\n")
+	b.WriteString("  chief:\n")
+	fmt.Fprintf(&b, "    command: %s\n", strconv.Quote(bin))
+
+	quotedArgs := make([]string, len(args))
+	for i, a := range args {
+		quotedArgs[i] = strconv.Quote(a)
+	}
+	fmt.Fprintf(&b, "    args: [%s]\n", strings.Join(quotedArgs, ", "))
+
+	if len(env) > 0 {
+		b.WriteString("    env:\n")
+		for _, k := range []string{chief.EnvAPIKey, chief.EnvProjectID, chief.EnvBaseURL} {
+			if v, ok := env[k]; ok {
+				fmt.Fprintf(&b, "      %s: %s\n", k, strconv.Quote(v))
+			}
+		}
+	}
+
+	return strings.TrimRight(b.String(), "\n")
 }
