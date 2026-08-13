@@ -128,7 +128,6 @@ func printSessionSummary(p *printer, s *chief.SessionResponse) {
 	p.kv("Created", s.CreatedAt.Format(time.RFC3339))
 	p.kv("Modified", s.ModifiedAt.Format(time.RFC3339))
 	printLiveSummary(p, s.LiveSummary)
-	printWriteup(p, s.Summary, s.ActionItems)
 }
 
 // printSessionState pairs the lifecycle state with the timestamp of that same
@@ -152,23 +151,6 @@ func printSessionState(p *printer, st chief.SessionState) {
 		line += p.subtle.Render(" " + at.Format(time.RFC3339))
 	}
 	p.kv("State", line)
-}
-
-// printWriteup renders the legacy post-session writeup, which only sessions
-// recorded before the live summary became canonical carry.
-func printWriteup(p *printer, summary string, actionItems []string) {
-	if summary != "" {
-		p.line("")
-		p.line(p.header.Render("Writeup"))
-		p.markdown(summary)
-	}
-	if len(actionItems) > 0 {
-		p.line("")
-		p.line(p.header.Render("Action items"))
-		for _, item := range actionItems {
-			p.line("  • " + item)
-		}
-	}
 }
 
 // printLiveSummary renders the reconciled bullets of a session, grouped by topic
