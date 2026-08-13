@@ -49,12 +49,13 @@ func renderSessionTable(p *printer, list *chief.SessionPage) {
 		return
 	}
 
-	headers := []string{"ID", "NAME", "MODIFIED"}
+	headers := []string{"ID", "NAME", "STATE", "MODIFIED"}
 	rows := make([][]string, 0, len(list.Data))
 	for _, s := range list.Data {
 		rows = append(rows, []string{
 			s.SessionID,
 			s.Name,
+			strings.TrimPrefix(s.State.State, "session."),
 			s.ModifiedAt.Format(time.RFC3339),
 		})
 	}
@@ -120,9 +121,55 @@ func printSessionSummary(p *printer, s *chief.SessionResponse) {
 	if s.Description != "" {
 		p.kv("Description", s.Description)
 	}
+	if s.Language != "" {
+		p.kv("Language", s.Language)
+	}
+	printSessionState(p, s.State)
 	p.kv("Created", s.CreatedAt.Format(time.RFC3339))
 	p.kv("Modified", s.ModifiedAt.Format(time.RFC3339))
 	printLiveSummary(p, s.LiveSummary)
+	printWriteup(p, s.Summary, s.ActionItems)
+}
+
+// printSessionState pairs the lifecycle state with the timestamp of that same
+// transition, which is the call's own clock rather than the row's Created.
+func printSessionState(p *printer, st chief.SessionState) {
+	if st.State != "" {
+		line := strings.TrimPrefix(st.State, "session.")
+		var at *time.Time
+		switch st.State {
+		case chief.SessionStateScheduled:
+			at = st.ScheduledAt
+		case chief.SessionStateStarted:
+			at = st.StartedAt
+		case chief.SessionStateEnded:
+			at = st.EndedAt
+		}
+		if at != nil {
+			line += p.subtle.Render(" " + at.Format(time.RFC3339))
+		}
+		p.kv("State", line)
+	}
+	if st.MeetingURL != "" {
+		p.kv("Meeting", st.MeetingURL)
+	}
+}
+
+// printWriteup renders the post-session summary, which stays empty until the
+// session ends and is separate from the running live summary above it.
+func printWriteup(p *printer, summary string, actionItems []string) {
+	if summary != "" {
+		p.line("")
+		p.line(p.header.Render("Writeup"))
+		p.markdown(summary)
+	}
+	if len(actionItems) > 0 {
+		p.line("")
+		p.line(p.header.Render("Action items"))
+		for _, item := range actionItems {
+			p.line("  • " + item)
+		}
+	}
 }
 
 // printLiveSummary renders the reconciled bullets of a session, grouped by topic
@@ -209,20 +256,11 @@ func summaryItemLine(p *printer, it chief.SessionLiveSummaryItem, indent int) st
 	}
 
 	line := fmt.Sprintf("%s%-3s %s", strings.Repeat(" ", indent), marker, text)
-	if who := attribution(it); who != "" {
-		line += p.subtle.Render(" — " + who)
+	if it.Owner != "" {
+		line += p.subtle.Render(" — " + it.Owner)
 	}
 	if len(notes) > 0 {
 		line += p.subtle.Render(" (" + strings.Join(notes, ", ") + ")")
 	}
 	return line
-}
-
-// attribution is the owner carrying a todo, or failing that whoever raised the
-// item.
-func attribution(it chief.SessionLiveSummaryItem) string {
-	if it.Owner != "" {
-		return it.Owner
-	}
-	return it.Speaker
 }
