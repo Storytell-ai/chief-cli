@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Storytell-ai/chief-go/chief"
@@ -121,4 +122,107 @@ func printSessionSummary(p *printer, s *chief.SessionResponse) {
 	}
 	p.kv("Created", s.CreatedAt.Format(time.RFC3339))
 	p.kv("Modified", s.ModifiedAt.Format(time.RFC3339))
+	printLiveSummary(p, s.LiveSummary)
+}
+
+// printLiveSummary renders the reconciled bullets of a session, grouped by topic
+// with sub-points nested under their parent. A nil summary means the server
+// predates the field, so it prints nothing at all rather than an empty section.
+func printLiveSummary(p *printer, ls *chief.SessionLiveSummary) {
+	if ls == nil {
+		return
+	}
+	if len(ls.Items) == 0 {
+		p.kv("Summary", p.subtle.Render("none yet"))
+		return
+	}
+
+	if ls.Headline != "" {
+		p.kv("Summary", ls.Headline)
+	} else {
+		p.line(p.key.Render("Summary:"))
+	}
+
+	// An item nests only under a parent that is itself top-level, so a dangling
+	// or deeper reference falls back to its own topic instead of vanishing.
+	topLevel := make(map[string]bool, len(ls.Items))
+	for _, it := range ls.Items {
+		// The empty id is excluded deliberately: registering it would make every
+		// root item read as a child of it, and they would render nowhere.
+		if it.ParentID == "" && it.ID != "" {
+			topLevel[it.ID] = true
+		}
+	}
+
+	var topics []string
+	roots := make(map[string][]chief.SessionLiveSummaryItem)
+	children := make(map[string][]chief.SessionLiveSummaryItem)
+	for _, it := range ls.Items {
+		if topLevel[it.ParentID] {
+			children[it.ParentID] = append(children[it.ParentID], it)
+			continue
+		}
+		if _, seen := roots[it.Topic]; !seen {
+			topics = append(topics, it.Topic)
+		}
+		roots[it.Topic] = append(roots[it.Topic], it)
+	}
+
+	for _, topic := range topics {
+		p.line("")
+		if topic != "" {
+			p.line("  " + p.header.Render(topic))
+		}
+		for _, it := range roots[topic] {
+			p.line(summaryItemLine(p, it, 4))
+			for _, child := range children[it.ID] {
+				p.line(summaryItemLine(p, child, 8))
+			}
+		}
+	}
+}
+
+// summaryItemLine formats one bullet. Todos carry their state in a checkbox;
+// every other kind names itself, since a decision and a stray note read the same
+// once the output is piped and loses its color.
+func summaryItemLine(p *printer, it chief.SessionLiveSummaryItem, indent int) string {
+	marker, state := "•", it.State
+	var notes []string
+	if it.Kind == chief.SummaryKindTodo {
+		marker = "[ ]"
+		if it.State == chief.SummaryStateDone {
+			marker, state = "[x]", ""
+		}
+	} else {
+		notes = append(notes, it.Kind)
+	}
+	if state != "" && state != chief.SummaryStateOpen {
+		notes = append(notes, state)
+	}
+	if !it.Active {
+		notes = append(notes, "set aside")
+	}
+
+	text := it.Text
+	if !it.Active || it.State == chief.SummaryStateDismissed {
+		text = p.subtle.Render(text)
+	}
+
+	line := fmt.Sprintf("%s%-3s %s", strings.Repeat(" ", indent), marker, text)
+	if who := attribution(it); who != "" {
+		line += p.subtle.Render(" — " + who)
+	}
+	if len(notes) > 0 {
+		line += p.subtle.Render(" (" + strings.Join(notes, ", ") + ")")
+	}
+	return line
+}
+
+// attribution is the owner carrying a todo, or failing that whoever raised the
+// item.
+func attribution(it chief.SessionLiveSummaryItem) string {
+	if it.Owner != "" {
+		return it.Owner
+	}
+	return it.Speaker
 }
