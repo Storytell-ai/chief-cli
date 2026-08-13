@@ -134,29 +134,28 @@ func printSessionSummary(p *printer, s *chief.SessionResponse) {
 // printSessionState pairs the lifecycle state with the timestamp of that same
 // transition, which is the call's own clock rather than the row's Created.
 func printSessionState(p *printer, st chief.SessionState) {
-	if st.State != "" {
-		line := strings.TrimPrefix(st.State, "session.")
-		var at *time.Time
-		switch st.State {
-		case chief.SessionStateScheduled:
-			at = st.ScheduledAt
-		case chief.SessionStateStarted:
-			at = st.StartedAt
-		case chief.SessionStateEnded:
-			at = st.EndedAt
-		}
-		if at != nil {
-			line += p.subtle.Render(" " + at.Format(time.RFC3339))
-		}
-		p.kv("State", line)
+	if st.State == "" {
+		return
 	}
-	if st.MeetingURL != "" {
-		p.kv("Meeting", st.MeetingURL)
+
+	line := strings.TrimPrefix(st.State, "session.")
+	var at *time.Time
+	switch st.State {
+	case chief.SessionStateScheduled:
+		at = st.ScheduledAt
+	case chief.SessionStateStarted:
+		at = st.StartedAt
+	case chief.SessionStateEnded:
+		at = st.EndedAt
 	}
+	if at != nil {
+		line += p.subtle.Render(" " + at.Format(time.RFC3339))
+	}
+	p.kv("State", line)
 }
 
-// printWriteup renders the post-session summary, which stays empty until the
-// session ends and is separate from the running live summary above it.
+// printWriteup renders the legacy post-session writeup, which only sessions
+// recorded before the live summary became canonical carry.
 func printWriteup(p *printer, summary string, actionItems []string) {
 	if summary != "" {
 		p.line("")
