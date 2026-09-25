@@ -82,7 +82,6 @@ func newSessionsGetCommand(state *app) *cobra.Command {
 	return cmd
 }
 
-// sessionTranscript is the --json shape for a session's full transcript.
 type sessionTranscript struct {
 	SessionID string                        `json:"session_id"`
 	Turns     []chief.SessionTranscriptTurn `json:"turns"`
