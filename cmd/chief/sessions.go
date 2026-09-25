@@ -17,7 +17,6 @@ func newSessionsCommand(state *app) *cobra.Command {
 	}
 	cmd.AddCommand(newSessionsListCommand(state))
 	cmd.AddCommand(newSessionsGetCommand(state))
-	cmd.AddCommand(newSessionsTranscriptCommand(state))
 	cmd.AddCommand(newSessionsUpdateCommand(state))
 	cmd.AddCommand(newDeleteCommand(state, "session", func(ctx context.Context, id string) error {
 		return state.chief.Sessions.Delete(ctx, id)
@@ -77,52 +76,6 @@ func newSessionsGetCommand(state *app) *cobra.Command {
 				return err
 			}
 			return state.printer.emit(session, func() { printSessionSummary(state.printer, session) })
-		},
-	}
-	return cmd
-}
-
-// sessionTranscript is the --json shape for a session's full transcript.
-type sessionTranscript struct {
-	SessionID string                        `json:"session_id"`
-	Turns     []chief.SessionTranscriptTurn `json:"turns"`
-}
-
-func newSessionsTranscriptCommand(state *app) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "transcript <session-id>",
-		Short: "Show a session's full transcript",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			turns := []chief.SessionTranscriptTurn{}
-			opts := []chief.ListOption{chief.WithLimit(100)}
-			for {
-				page, err := state.chief.Sessions.GetTranscript(cmd.Context(), args[0], opts...)
-				if err != nil {
-					if chief.IsNotFound(err) {
-						return fmt.Errorf("session %q not found", args[0])
-					}
-					return err
-				}
-				turns = append(turns, page.Data...)
-				if !page.HasMore {
-					break
-				}
-				opts = []chief.ListOption{chief.WithLimit(100), chief.WithAfterID(page.LastID)}
-			}
-			return state.printer.emit(sessionTranscript{SessionID: args[0], Turns: turns}, func() {
-				if len(turns) == 0 {
-					state.printer.line("no turns")
-					return
-				}
-				for _, t := range turns {
-					line := state.printer.key.Render(t.SpeakerLabel+":") + " " + t.Text
-					if t.At != "" {
-						line = state.printer.subtle.Render("["+t.At+"]") + " " + line
-					}
-					state.printer.line(line)
-				}
-			})
 		},
 	}
 	return cmd
