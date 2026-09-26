@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -171,6 +172,7 @@ func printSessionSummary(p *printer, s *chief.SessionResponse) {
 		p.kv("Language", s.Language)
 	}
 	printSessionState(p, s.State)
+	p.kv("Turns", strconv.Itoa(s.TurnCount))
 	p.kv("Created", s.CreatedAt.Format(time.RFC3339))
 	p.kv("Modified", s.ModifiedAt.Format(time.RFC3339))
 	printLiveSummary(p, s.LiveSummary)
