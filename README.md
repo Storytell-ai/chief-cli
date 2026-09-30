@@ -137,7 +137,7 @@ chief
 ├── memories              Persistent context the assistant recalls
 │   └── create / list / get / update / delete
 ├── sessions              Inspect and manage sessions
-│   └── list / get / update / delete
+│   └── list / get / transcript / update / delete
 ├── mcp                   Generate MCP server config for coding agents
 │   └── config
 └── api                   Make a raw authenticated API request
@@ -256,6 +256,7 @@ chief labels delete label_xyz
 ```bash
 chief sessions list --limit 20
 chief sessions get session_abc
+chief sessions transcript session_abc     # full transcript, one line per turn
 chief sessions update session_abc --name "Onboarding" --description "Notes"
 chief sessions delete session_abc
 ```
