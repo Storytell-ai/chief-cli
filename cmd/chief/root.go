@@ -92,11 +92,13 @@ func Execute(ctx context.Context) error {
 	root.AddCommand(newDoctorCommand(state))
 	root.AddCommand(newActionsCommand(state))
 	root.AddCommand(newAssetsCommand(state))
+	root.AddCommand(newCapturesCommand(state))
 	root.AddCommand(newChatsCommand(state))
 	root.AddCommand(newLabelsCommand(state))
 	root.AddCommand(newSessionsCommand(state))
 	root.AddCommand(newSkillsCommand(state))
 	root.AddCommand(newMemoriesCommand(state))
+	root.AddCommand(newOpenCommand(state))
 	root.AddCommand(newAPICommand(state))
 	root.AddCommand(newMCPCommand(state))
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"charm.land/glamour/v2"
 	"charm.land/glamour/v2/styles"
@@ -277,22 +278,69 @@ func (p *printer) emit(v any, human func()) error {
 	return nil
 }
 
+// emitPiped is emit for commands that also write JSON whenever stdout is not a
+// terminal, without --json.
+func (p *printer) emitPiped(v any, human func()) error {
+	if p.json || !p.tty {
+		return p.writeJSON(v)
+	}
+	human()
+	return nil
+}
+
 // writeJSON marshals v to stdout, indented on a TTY and compact when piped.
 func (p *printer) writeJSON(v any) error {
-	var (
-		raw []byte
-		err error
-	)
-	if p.tty {
-		raw, err = json.MarshalIndent(v, "", "  ")
-	} else {
-		raw, err = json.Marshal(v)
+	if !p.tty {
+		return p.writeJSONLine(v)
 	}
+	raw, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode json output: %w", err)
 	}
-	p.line(string(raw))
+	p.line(escapeControls(string(raw)))
 	return nil
+}
+
+// writeJSONLine marshals v to a single line of stdout.
+func (p *printer) writeJSONLine(v any) error {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("encode json output: %w", err)
+	}
+	p.line(escapeControls(string(raw)))
+	return nil
+}
+
+// escapeControls writes the characters a terminal acts on that JSON leaves as
+// they are in a string, DEL and the C1 controls, as JSON escapes.
+func escapeControls(raw string) string {
+	var b strings.Builder
+	for _, r := range raw {
+		if r == '\x7f' || r >= '\u0080' && r <= '\u009f' {
+			fmt.Fprintf(&b, `\u%04x`, r)
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// terminalText is s without what a terminal acts on rather than shows, other
+// than newlines and tabs: control characters, which start its escape sequences,
+// and the marks that reorder the text around them. Everything that came from
+// someone else goes through it or oneLine before it is printed as text.
+func terminalText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r != '\n' && r != '\t' && unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// oneLine is terminalText for what has to stay on its line, such as a title.
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(terminalText(s)), " ")
 }
 
 // writeRawJSON pretty-prints already-encoded JSON on a TTY and emits it
