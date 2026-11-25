@@ -138,6 +138,9 @@ chief
 │   └── create / list / get / update / delete
 ├── sessions              Inspect and manage sessions
 │   └── list / get / transcript / update / delete
+├── captures              Read and follow the captures you record
+│   └── list / read / screenshot / wait
+├── open                  Open a link to a capture or a Live Session
 ├── mcp                   Generate MCP server config for coding agents
 │   └── config
 └── api                   Make a raw authenticated API request
@@ -260,6 +263,41 @@ chief sessions transcript session_abc     # full transcript, one line per turn
 chief sessions update session_abc --name "Onboarding" --description "Notes"
 chief sessions delete session_abc
 ```
+
+### Captures
+
+Read what you record with Chief Companion, and wait for more. `list`, `read` and `wait` look in the configured project; `--all-projects` looks in every one and can't be combined with `--project`. Naming a capture needs no project. These commands print JSON whenever stdout is not a terminal.
+
+```bash
+chief captures list
+chief captures read                          # the latest one
+chief captures read capture-abc              # in parts of about 40 KB
+chief captures screenshot capture-abc d8aad64dib2c7m3ae7a0 -o screen.jpg
+
+# Wait until nothing is being recorded any more, then print what was added.
+chief captures wait
+
+# Print what is said as it is said.
+chief captures wait --live
+chief captures wait --follow --screenshots ./shots
+
+# Open a capture's link or a Live Session's.
+chief open https://chief.bot/shared/capture/4b1f...
+```
+
+| Flag (`wait`)    | Description                                                                        |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| `--live`         | Print what came after a pause of five seconds, instead of when recording stops     |
+| `--follow`       | Keep printing what comes, one JSON object per line when piped (implies `--live`)   |
+| `--capture`      | Wait for this capture alone, in any project                                        |
+| `--cursor`       | Wait for what changes after this cursor (default from now)                         |
+| `--timeout`      | Stop after this long, with an empty result if nothing came (default `0`, no limit) |
+| `--screenshots`  | Save new screenshots in this directory, named by entry id                          |
+| `--all-projects` | Look in every project                                                              |
+
+`wait` returns at once when nothing is being recorded. Each result has the command that goes on from it, whose cursor skips nothing: `read` prints it as `wait`, and `wait` as `next`. An entry whose id was seen before replaces the earlier one. `--follow` outlives a failing connection; if its cursor is too old it says so and follows from then on. Ctrl-C ends it without an error.
+
+A spoken entry labeled You is a best guess at who spoke. It can change for as long as the capture is being recorded, and is never proof.
 
 ## Use with AI agents
 
